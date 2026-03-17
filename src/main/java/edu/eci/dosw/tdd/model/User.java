@@ -1,6 +1,9 @@
 package edu.eci.dosw.tdd.model;
 
+import lombok.Data;
+
+@Data
 public class User {
-    string name;
-    sting ID;
+    String id;
+    String name;
 }

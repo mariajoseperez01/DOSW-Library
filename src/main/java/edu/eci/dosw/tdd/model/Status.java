@@ -1,5 +1,6 @@
 package edu.eci.dosw.tdd.model;
 
-public class Status {
-
+public enum Status {
+	ACTIVE,
+	RETURNED
 }
