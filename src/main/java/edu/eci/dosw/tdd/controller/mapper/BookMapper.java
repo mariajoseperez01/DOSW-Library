@@ -13,16 +13,21 @@ public final class BookMapper {
 		book.setId(dto.getId());
 		book.setTitle(dto.getTitle());
 		book.setAuthor(dto.getAuthor());
+		book.setTotalUnits(dto.getTotalUnits() == null ? 0 : dto.getTotalUnits());
+		book.setAvailableUnits(dto.getAvailableUnits() == null
+			? (dto.getTotalUnits() == null ? 0 : dto.getTotalUnits())
+			: dto.getAvailableUnits());
 		return book;
 	}
 
-	public static BookDTO toDto(Book book, int quantity) {
+	public static BookDTO toDto(Book book) {
 		BookDTO dto = new BookDTO();
 		dto.setId(book.getId());
 		dto.setTitle(book.getTitle());
 		dto.setAuthor(book.getAuthor());
-		dto.setQuantity(quantity);
-		dto.setAvailable(quantity > 0);
+		dto.setTotalUnits(book.getTotalUnits());
+		dto.setAvailableUnits(book.getAvailableUnits());
+		dto.setAvailable(book.getAvailableUnits() > 0);
 		return dto;
 	}
 }

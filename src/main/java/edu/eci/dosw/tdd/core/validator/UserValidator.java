@@ -11,5 +11,7 @@ public final class UserValidator {
 	public static void validate(User user) {
 		ValidationUtil.requireNotNull(user, "User is required");
 		ValidationUtil.requireNonBlank(user.getName(), "User name is required");
+		ValidationUtil.requireNonBlank(user.getUsername(), "Username is required");
+		ValidationUtil.requireNonBlank(user.getPassword(), "Password is required");
 	}
 }

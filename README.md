@@ -273,10 +273,18 @@ mvn verify
 
 ### Análisis estático (Sonar)
 
+Configura estas variables de entorno antes de ejecutar el análisis:
+
+```powershell
+$env:SONAR_TOKEN="tu_token"
+$env:SONAR_ORGANIZATION="tu_organizacion"
+$env:SONAR_PROJECT_KEY="tu_project_key"
+```
+
 Comando:
 
 ```bash
-mvn sonar:sonar
+mvn -DskipTests sonar:sonar -Dsonar.organization=tu_organizacion -Dsonar.projectKey=tu_project_key
 ```
 
 Nota importante: para que funcione, debes tener configurado en SonarCloud:
@@ -335,3 +343,507 @@ Si estás estudiando este proyecto para clase, te recomiendo practicar en este o
 6. Revisar los tests y luego escribir uno nuevo por tu cuenta.
 
 Ese ejercicio te deja dominando el flujo completo de una API de negocio real.
+
+## 14) Parte 1 - Persistencia relacional (paso a paso)
+
+### Paso 1. Modelo relacional en 3FN
+
+Se normalizo el dominio en 3 tablas principales: `books`, `users` y `loans`.
+
+- Cada libro mantiene inventario (`total_units`, `available_units`).
+- Cada prestamo referencia exactamente 1 usuario y 1 libro.
+- El estado del prestamo se maneja con enum (`ACTIVE`, `RETURNED`).
+- El usuario maneja rol para evolucionar hacia autorizacion (`USER`, `LIBRARIAN`).
+
+Diagrama ER (3FN):
+
+```mermaid
+erDiagram
+	USERS ||--o{ LOANS : "has"
+	BOOKS ||--o{ LOANS : "is borrowed in"
+
+	USERS {
+		string id PK
+		string name
+		string username UK
+		string password
+		string role
+	}
+
+	BOOKS {
+		string id PK
+		string title
+		string author
+		int total_units
+		int available_units
+	}
+
+	LOANS {
+		string id PK
+		string user_id FK
+		string book_id FK
+		date loan_date
+		date return_date
+		string status
+	}
+```
+
+### Paso 2. Nueva capa persistence
+
+Se agrego la capa `persistence` al mismo nivel de `controller` y `core`, con:
+
+- `persistence/entity`: entidades JPA.
+- `persistence/repository`: interfaces Spring Data JPA.
+- `persistence/mapper`: mappers entre entidad y modelo de dominio.
+
+### Paso 3. Dependencias para persistencia
+
+Se agregaron a `pom.xml`:
+
+- Spring Data JPA
+- Driver PostgreSQL
+- H2 para pruebas
+
+### Paso 4. Entidades DAO/JPA
+
+Entidades creadas:
+
+- `BookEntity`
+- `UserEntity`
+- `LoanEntity`
+
+Con relaciones:
+
+- `LoanEntity` -> `UserEntity` (`@ManyToOne`)
+- `LoanEntity` -> `BookEntity` (`@ManyToOne`)
+
+### Paso 5. Repositorios
+
+Se crearon:
+
+- `BookRepository`
+- `UserRepository`
+- `LoanRepository`
+
+Incluyendo consultas derivadas para reglas de negocio (por ejemplo, conteo de prestamos activos por usuario).
+
+### Paso 6. Configuracion PostgreSQL en YAML
+
+Archivo: `src/main/resources/application.yaml`
+
+Variables usadas:
+
+- `DB_HOST` (default `localhost`)
+- `DB_PORT` (default `5432`)
+- `DB_NAME` (default `dosw_library`)
+- `DB_USER` (default `postgres`)
+- `DB_PASSWORD` (default `postgres`)
+
+### Paso 7. Servicios migrados de memoria a BD
+
+Se eliminaron estructuras en memoria y se inyectaron repositorios en:
+
+- `BookService`
+- `UserService`
+- `LoanService`
+
+### Paso 8. Escaneo JPA
+
+No fue necesario `@EnableJpaRepositories` porque los paquetes estan bajo el root package de la aplicacion y Spring Boot los detecta automaticamente.
+
+### Paso 9. Pruebas funcionales con persistencia
+
+Se migraron pruebas de servicios a `@SpringBootTest` con perfil `test` y H2 en memoria:
+
+- `BookServiceTest`
+- `UserServiceTest`
+- `LoanServiceTest`
+- `DoswLibraryApplicationTests`
+
+Comando ejecutado:
+
+```bash
+mvn test
+```
+
+Resultado actual: **9 tests OK, 0 failures, 0 errors**.
+
+### Paso 10. Video
+
+Pendiente manual: grabar video de evidencias y agregar enlace en este README.
+
+## 15) Bitácora cronológica completa (TODO explicado en orden)
+
+Esta sección explica, en orden real de ejecución, cada cambio importante aplicado al proyecto:
+
+- Qué se cambió
+- Dónde se cambió (archivo y capa)
+- Por qué se cambió
+- Qué efecto tuvo en el sistema
+- Qué problema apareció durante la implementación y cómo se corrigió
+
+### Fase 0. Estado inicial del proyecto
+
+Antes de la evolución, el sistema estaba así:
+
+- Arquitectura por capas con `controller`, `core/model`, `core/service`, `core/validator`.
+- Persistencia en memoria:
+	- `BookService` guardaba datos en `Map`.
+	- `UserService` guardaba datos en `List`.
+	- `LoanService` guardaba datos en `List`.
+- No había persistencia relacional real.
+- No existían entidades JPA ni repositorios Spring Data.
+- Había documentación básica y pruebas de servicio orientadas a memoria.
+
+Objetivo de la evolución: pasar de memoria a base de datos relacional, preparar modelo de inventario y dejar la base lista para seguridad por roles/JWT.
+
+### Fase 1. Saneamiento de estructura y dependencias
+
+#### 1.1 Eliminación de duplicados de modelo
+
+Qué se hizo:
+
+- Se eliminaron clases duplicadas antiguas del paquete `edu.eci.dosw.tdd.model`.
+
+Por qué:
+
+- Existían dos fuentes de verdad para entidades (`tdd.model` y `tdd.core.model`), lo cual genera ambigüedad y errores futuros.
+
+Resultado:
+
+- Se dejó como modelo oficial solamente `tdd.core.model`.
+
+#### 1.2 Limpieza de Lombok repetido en Maven
+
+Qué se hizo:
+
+- Se consolidó Lombok a una sola dependencia en `pom.xml`.
+
+Por qué:
+
+- Había entradas duplicadas con versiones distintas, lo que producía warnings y riesgo de comportamiento inconsistente.
+
+Resultado:
+
+- POM más limpio y determinista.
+
+### Fase 2. Documentación de API y reducción de boilerplate
+
+#### 2.1 Swagger/OpenAPI
+
+Qué se hizo:
+
+- Se agregó dependencia `springdoc-openapi-starter-webmvc-ui` en `pom.xml`.
+- Se agregó metadata global con `@OpenAPIDefinition` en `DoswLibraryApplication`.
+- Se documentaron endpoints en controladores con `@Tag` y `@Operation`:
+	- `BookController`
+	- `UserController`
+	- `LoanController`
+
+Por qué:
+
+- El ejercicio exige documentación de APIs y mejora de trazabilidad funcional.
+
+Resultado:
+
+- API navegable y documentada de forma estándar.
+
+#### 2.2 Uso real de Lombok
+
+Qué se hizo:
+
+- Se migraron clases con getters/setters manuales a `@Data`:
+	- `core/model`: `Book`, `User`, `Loan`
+	- `controller/dto`: `BookDTO`, `UserDTO`, `LoanDTO`
+
+Por qué:
+
+- Reducir código repetitivo y facilitar evolución rápida del dominio.
+
+Resultado:
+
+- Código más corto y enfocado en lógica de negocio.
+
+### Fase 3. Preparación de Parte 1 de persistencia relacional
+
+#### 3.1 Evolución del modelo de dominio para nuevas reglas
+
+Qué se hizo:
+
+- En `Book` se reemplazó la lógica implícita de disponibilidad por inventario explícito:
+	- `totalUnits`
+	- `availableUnits`
+- En `User` se agregaron credenciales y rol:
+	- `username`
+	- `password`
+	- `role`
+- Se creó `UserRole` enum (`USER`, `LIBRARIAN`).
+
+Por qué:
+
+- El enunciado requiere:
+	- inventario real (no solo “disponible sí/no”)
+	- usuario con credenciales
+	- preparación para autorización por rol
+
+Resultado:
+
+- Dominio alineado con la especificación nueva.
+
+#### 3.2 Evolución de DTOs y mappers de controller
+
+Qué se hizo:
+
+- `BookDTO` cambió de `quantity` a:
+	- `totalUnits`
+	- `availableUnits`
+	- `available`
+- `UserDTO` incorporó:
+	- `username`
+	- `password`
+	- `role`
+- `BookMapper` y `UserMapper` se ajustaron a la nueva estructura.
+
+Por qué:
+
+- Mantener contrato HTTP coherente con nuevo dominio.
+
+Resultado:
+
+- API y modelo interno dejaron de estar desalineados.
+
+### Fase 4. Nueva capa persistence
+
+Se creó `src/main/java/edu/eci/dosw/tdd/persistence` con tres subcapas.
+
+#### 4.1 Entidades JPA (`persistence/entity`)
+
+Archivos creados:
+
+- `BookEntity`
+- `UserEntity`
+- `LoanEntity`
+
+Decisiones de diseño:
+
+- IDs tipo `String` para mantener compatibilidad con lógica existente.
+- `LoanEntity` usa relaciones `@ManyToOne` hacia libro y usuario.
+- `UserEntity.username` se marcó `unique`.
+- Inventario persistido en columnas `total_units`, `available_units`.
+
+#### 4.2 Repositorios (`persistence/repository`)
+
+Archivos creados:
+
+- `BookRepository extends JpaRepository<BookEntity, String>`
+- `UserRepository extends JpaRepository<UserEntity, String>`
+- `LoanRepository extends JpaRepository<LoanEntity, String>`
+
+Consultas derivadas relevantes:
+
+- `UserRepository.existsByUsername(...)`
+- `LoanRepository.countByUserIdAndStatus(...)`
+- `LoanRepository.findByUserId(...)`
+
+#### 4.3 Mapeo entre entidades y dominio (`persistence/mapper`)
+
+Archivos creados:
+
+- `BookPersistenceMapper`
+- `UserPersistenceMapper`
+- `LoanPersistenceMapper`
+
+Nota importante de implementación:
+
+- Inicialmente se intentó usar generación de implementaciones con MapStruct.
+- En este entorno, no se generaron beans automáticamente.
+- Para garantizar funcionamiento estable inmediato, los mappers quedaron como `@Component` manuales (mapeo explícito campo a campo).
+
+Resultado:
+
+- El sistema tiene mapeo claro y trazable entre capa dominio y capa persistencia.
+
+### Fase 5. Configuración de infraestructura (Maven + BD)
+
+#### 5.1 Dependencias agregadas en `pom.xml`
+
+- `spring-boot-starter-data-jpa`
+- `postgresql` (runtime)
+- `h2` (test)
+- `mapstruct` + procesador (preparación para mapeo)
+- `lombok-mapstruct-binding`
+
+#### 5.2 Ajustes de compilación
+
+- Se configuró `maven-compiler-plugin` con annotation processors.
+- Se actualizó Lombok a versión compatible con el JDK local para evitar fallos de compilación.
+
+#### 5.3 Configuración de datasource
+
+Se creó `src/main/resources/application.yaml` con PostgreSQL parametrizado por variables de entorno:
+
+- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
+
+Se creó `src/test/resources/application-test.yaml` con H2 en memoria para pruebas.
+
+Se eliminó `application.properties` anterior (quedó reemplazado por YAML).
+
+### Fase 6. Migración de servicios: de memoria a BD
+
+#### 6.1 `BookService`
+
+Cambio principal:
+
+- Se eliminaron `Map` en memoria y se inyectó `BookRepository`.
+
+Lógica clave adaptada:
+
+- `addBook` guarda en BD.
+- `getAllBooks/getBookById` consultan BD.
+- `decreaseStock` y `increaseStock` actualizan `availableUnits` persistido.
+- `increaseStock` no permite superar `totalUnits`.
+- `updateAvailability(false)` fuerza `availableUnits = 0`.
+
+#### 6.2 `UserService`
+
+Cambio principal:
+
+- Se eliminó `List<User>` en memoria y se inyectó `UserRepository`.
+
+Lógica clave adaptada:
+
+- Validación de unicidad de username vía BD.
+- Asignación de rol por defecto `USER`.
+- Registro, consulta por id y listado usando JPA.
+
+#### 6.3 `LoanService`
+
+Cambio principal:
+
+- Se eliminó `List<Loan>` en memoria y se inyectó `LoanRepository`.
+
+Lógica clave adaptada:
+
+- Conteo de préstamos activos por usuario desde BD.
+- Creación de préstamo persistida.
+- Devolución persistida con actualización de inventario.
+- Nuevo método de consulta por usuario (`getLoansByUserId`) para preparar reglas futuras.
+
+### Fase 7. Validaciones de negocio reforzadas
+
+#### 7.1 `BookValidator`
+
+Se agregaron reglas de inventario:
+
+- `totalUnits > 0`
+- `availableUnits >= 0`
+- `availableUnits <= totalUnits`
+
+#### 7.2 `UserValidator`
+
+Se agregaron reglas de credenciales:
+
+- `username` obligatorio
+- `password` obligatorio
+
+### Fase 8. Ajustes en controladores tras cambio de inventario
+
+#### 8.1 `BookController`
+
+Se ajustó para nuevo contrato:
+
+- Ya no recibe/usa `quantity`.
+- Trabaja con `BookDTO` basado en inventario.
+- Usa `BookMapper.toDto(book)` sin recalcular desde estructuras en memoria.
+
+### Fase 9. Pruebas funcionales con persistencia real
+
+#### 9.1 Migración de tests a contexto Spring + H2
+
+Se actualizó:
+
+- `DoswLibraryApplicationTests`
+- `BookServiceTest`
+- `UserServiceTest`
+- `LoanServiceTest`
+
+Cambios aplicados:
+
+- `@SpringBootTest`
+- `@ActiveProfiles("test")`
+- limpieza de datos entre pruebas con repositorios
+- escenarios adaptados a nuevo modelo:
+	- inventario (`totalUnits/availableUnits`)
+	- credenciales (`username/password`)
+
+Resultado validado:
+
+- `mvn test` en verde.
+- 9 pruebas ejecutadas, 0 fallos, 0 errores.
+
+### Fase 10. Problemas encontrados durante la implementación y solución
+
+#### Problema A: incompatibilidad de Lombok con JDK local
+
+- Síntoma: error de compilación en fase de annotation processing.
+- Causa: versión de Lombok no compatible con JDK usado localmente.
+- Solución: actualización de versión de Lombok en `pom.xml`.
+
+#### Problema B: fallo de arranque por anotaciones de escaneo JPA
+
+- Síntoma: error de compilación/imports por anotaciones de escaneo.
+- Causa: anotaciones agregadas no eran necesarias en esta estructura de paquetes.
+- Solución: eliminar anotaciones extra y usar autodetección estándar de Spring Boot.
+
+#### Problema C: beans de MapStruct no generados
+
+- Síntoma: `No qualifying bean ... PersistenceMapper` al iniciar contexto.
+- Causa: no se generaron implementaciones en `target/generated-sources/annotations` en este entorno.
+- Solución: mappers de persistencia implementados manualmente como `@Component`.
+
+### Fase 11. Estado final exacto después de la evolución
+
+Ya implementado y funcionando:
+
+- Persistencia relacional real (JPA + repositorios + entidades + H2 para test + PostgreSQL para runtime).
+- Inventario de libros con unidades totales y disponibles.
+- Usuario con credenciales y rol (`USER`, `LIBRARIAN`) en dominio y persistencia.
+- Controladores adaptados al nuevo contrato.
+- Validaciones alineadas con reglas nuevas.
+- Pruebas funcionales ejecutadas exitosamente sobre contexto con persistencia.
+
+Pendiente de la Parte 1 (manual):
+
+- Grabar video de evidencia y agregar link.
+
+Pendiente de fases siguientes (todavía no implementado aquí):
+
+- Autenticación JWT.
+- Autorización por roles en endpoints.
+- Seguridad completa de contraseñas (hash + flujo de login).
+
+### Fase 12. Mapa rápido de “qué parte de código hace qué”
+
+Dominio (`core/model`):
+
+- Define las reglas de datos del negocio (book/user/loan/status/role).
+
+Aplicación (`core/service`):
+
+- Ejecuta la lógica de negocio y orquesta validaciones + repositorios.
+
+Persistencia (`persistence/entity`, `repository`, `mapper`):
+
+- Traduce y guarda datos en BD relacional.
+
+API (`controller`, `dto`, `controller/mapper`):
+
+- Expone endpoints REST y transforma entradas/salidas.
+
+Validación y errores (`core/validator`, `controller/GlobalExceptionHandler`):
+
+- Enforce de reglas + respuestas consistentes ante errores.
+
+Pruebas (`src/test/java` + `application-test.yaml`):
+
+- Evidencian comportamiento funcional contra BD en memoria.

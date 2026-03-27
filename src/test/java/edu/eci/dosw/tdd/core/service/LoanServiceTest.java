@@ -3,8 +3,12 @@ package edu.eci.dosw.tdd.core.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 
 import edu.eci.dosw.tdd.core.exception.BookNotAvailableException;
 import edu.eci.dosw.tdd.core.exception.LoanLimitExceededException;
@@ -12,29 +16,60 @@ import edu.eci.dosw.tdd.core.model.Book;
 import edu.eci.dosw.tdd.core.model.Loan;
 import edu.eci.dosw.tdd.core.model.Status;
 import edu.eci.dosw.tdd.core.model.User;
+import edu.eci.dosw.tdd.persistence.repository.BookRepository;
+import edu.eci.dosw.tdd.persistence.repository.LoanRepository;
+import edu.eci.dosw.tdd.persistence.repository.UserRepository;
 
+@SpringBootTest
+@ActiveProfiles("test")
 class LoanServiceTest {
 
+    @Autowired
     private BookService bookService;
+
+    @Autowired
     private UserService userService;
+
+    @Autowired
     private LoanService loanService;
+
+    @Autowired
+    private BookRepository bookRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private LoanRepository loanRepository;
+
     private String bookId;
     private String userId;
 
     @BeforeEach
     void setUp() {
-        bookService = new BookService();
-        userService = new UserService();
-        loanService = new LoanService(bookService, userService);
+        loanRepository.deleteAll();
+        bookRepository.deleteAll();
+        userRepository.deleteAll();
 
         Book book = new Book();
         book.setTitle("Refactoring");
         book.setAuthor("Martin Fowler");
-        bookId = bookService.addBook(book, 1).getId();
+        book.setTotalUnits(1);
+        book.setAvailableUnits(1);
+        bookId = bookService.addBook(book).getId();
 
         User user = new User();
         user.setName("Ana");
+        user.setUsername("ana");
+        user.setPassword("secret");
         userId = userService.registerUser(user).getId();
+    }
+
+    @AfterEach
+    void tearDown() {
+        loanRepository.deleteAll();
+        bookRepository.deleteAll();
+        userRepository.deleteAll();
     }
 
     @Test
@@ -62,17 +97,23 @@ class LoanServiceTest {
         Book second = new Book();
         second.setTitle("Patterns");
         second.setAuthor("GoF");
-        String secondId = bookService.addBook(second, 1).getId();
+        second.setTotalUnits(1);
+        second.setAvailableUnits(1);
+        String secondId = bookService.addBook(second).getId();
 
         Book third = new Book();
         third.setTitle("Effective Java");
         third.setAuthor("Joshua Bloch");
-        String thirdId = bookService.addBook(third, 1).getId();
+        third.setTotalUnits(1);
+        third.setAvailableUnits(1);
+        String thirdId = bookService.addBook(third).getId();
 
         Book fourth = new Book();
         fourth.setTitle("TDD");
         fourth.setAuthor("Kent Beck");
-        String fourthId = bookService.addBook(fourth, 1).getId();
+        fourth.setTotalUnits(1);
+        fourth.setAvailableUnits(1);
+        String fourthId = bookService.addBook(fourth).getId();
 
         loanService.createLoan(userId, bookId);
         loanService.createLoan(userId, secondId);

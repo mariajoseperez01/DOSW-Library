@@ -1,53 +1,55 @@
 package edu.eci.dosw.tdd.core.service;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import edu.eci.dosw.tdd.core.exception.BookNotAvailableException;
 import edu.eci.dosw.tdd.core.model.Book;
 import edu.eci.dosw.tdd.core.util.IdGeneratorUtil;
 import edu.eci.dosw.tdd.core.util.ValidationUtil;
 import edu.eci.dosw.tdd.core.validator.BookValidator;
+import edu.eci.dosw.tdd.persistence.mapper.BookPersistenceMapper;
+import edu.eci.dosw.tdd.persistence.repository.BookRepository;
 
 @Service
+@Transactional
 public class BookService {
 
-	private final Map<String, Book> books = new LinkedHashMap<>();
-	private final Map<String, Integer> stockByBookId = new LinkedHashMap<>();
+	private final BookRepository bookRepository;
+	private final BookPersistenceMapper bookPersistenceMapper;
 
-	public Book addBook(Book book, int quantity) {
+	public BookService(BookRepository bookRepository, BookPersistenceMapper bookPersistenceMapper) {
+		this.bookRepository = bookRepository;
+		this.bookPersistenceMapper = bookPersistenceMapper;
+	}
+
+	public Book addBook(Book book) {
 		BookValidator.validate(book);
-		ValidationUtil.requireTrue(quantity >= 0, "Book quantity must be >= 0");
 
 		if (book.getId() == null || book.getId().isBlank()) {
 			book.setId(IdGeneratorUtil.generateId());
 		}
 
-		books.put(book.getId(), book);
-		stockByBookId.put(book.getId(), quantity);
-		return book;
+		return bookPersistenceMapper.toDomain(bookRepository.save(bookPersistenceMapper.toEntity(book)));
 	}
 
+	@Transactional(readOnly = true)
 	public List<Book> getAllBooks() {
-		return new ArrayList<>(books.values());
+		return bookRepository.findAll().stream().map(bookPersistenceMapper::toDomain).toList();
 	}
 
+	@Transactional(readOnly = true)
 	public Book getBookById(String bookId) {
 		ValidationUtil.requireNonBlank(bookId, "Book id is required");
-		Book book = books.get(bookId);
-		if (book == null) {
-			throw new BookNotAvailableException("Book not found: " + bookId);
-		}
-		return book;
+		return bookRepository.findById(bookId)
+			.map(bookPersistenceMapper::toDomain)
+			.orElseThrow(() -> new BookNotAvailableException("Book not found: " + bookId));
 	}
 
 	public int getBookQuantity(String bookId) {
-		getBookById(bookId);
-		return stockByBookId.getOrDefault(bookId, 0);
+		return getBookById(bookId).getAvailableUnits();
 	}
 
 	public boolean isBookAvailable(String bookId) {
@@ -55,26 +57,34 @@ public class BookService {
 	}
 
 	public void updateAvailability(String bookId, boolean available) {
-		getBookById(bookId);
+		Book book = getBookById(bookId);
 		if (available) {
-			if (stockByBookId.getOrDefault(bookId, 0) == 0) {
-				stockByBookId.put(bookId, 1);
+			if (book.getAvailableUnits() == 0) {
+				book.setAvailableUnits(1);
+				if (book.getTotalUnits() == 0) {
+					book.setTotalUnits(1);
+				}
+				bookRepository.save(bookPersistenceMapper.toEntity(book));
 			}
 			return;
 		}
-		stockByBookId.put(bookId, 0);
+		book.setAvailableUnits(0);
+		bookRepository.save(bookPersistenceMapper.toEntity(book));
 	}
 
 	public void decreaseStock(String bookId) {
-		int current = getBookQuantity(bookId);
-		if (current <= 0) {
+		Book book = getBookById(bookId);
+		if (book.getAvailableUnits() <= 0) {
 			throw new BookNotAvailableException("Book is not available: " + bookId);
 		}
-		stockByBookId.put(bookId, current - 1);
+		book.setAvailableUnits(book.getAvailableUnits() - 1);
+		bookRepository.save(bookPersistenceMapper.toEntity(book));
 	}
 
 	public void increaseStock(String bookId) {
-		int current = getBookQuantity(bookId);
-		stockByBookId.put(bookId, current + 1);
+		Book book = getBookById(bookId);
+		int next = Math.min(book.getAvailableUnits() + 1, book.getTotalUnits());
+		book.setAvailableUnits(next);
+		bookRepository.save(bookPersistenceMapper.toEntity(book));
 	}
 }
