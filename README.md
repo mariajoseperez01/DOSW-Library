@@ -9,10 +9,55 @@ Proyecto Spring Boot con soporte para pruebas unitarias con JUnit 5, cobertura c
 ## DIAGRAMA DE COMPONENTES ESPECIFICO DE LA BIBLIOTECA
 ![alt text](src/main/resources/uml/ComponentesEspecifico.png)
 
+## DIAGRAMA ENTIDAD RELACION (3FN)
+
+Archivo UML (PlantUML): `src/main/resources/uml/EntidadRelacion3FN.puml`
+
+```plantuml
+@startuml
+hide circle
+skinparam linetype ortho
+
+entity "BOOKS" as books {
+	*id : varchar(50) <<PK>>
+	--
+	title : varchar
+	author : varchar
+}
+
+entity "USERS" as users {
+	*id : varchar(50) <<PK>>
+	--
+	name : varchar
+}
+
+entity "BOOK_INVENTORY" as inventory {
+	*book_id : varchar(50) <<PK, FK>>
+	--
+	copies : int
+}
+
+entity "LOANS" as loans {
+	*id : bigint <<PK>>
+	--
+	book_id : varchar(50) <<FK>>
+	user_id : varchar(50) <<FK>>
+	loan_date : date
+	status : varchar(20)
+	return_date : date
+}
+
+books ||--|| inventory : "1:1"
+books ||--o{ loans : "1:N"
+users ||--o{ loans : "1:N"
+@enduml
+```
+
 ## Requisitos
 
 - Java 21
 - Maven 3.9+ o el wrapper incluido en el repositorio
+- Docker Desktop (para PostgreSQL y SonarQube)
 
 ## Ejecución
 
@@ -26,6 +71,12 @@ En Windows:
 
 ```powershell
 .\mvnw.cmd test
+```
+
+Levantar PostgreSQL y SonarQube:
+
+```powershell
+docker compose up -d
 ```
 
 Ejecutar el reporte de cobertura de JaCoCo:
@@ -46,118 +97,14 @@ Para analizar el código con SonarQube:
 
 ## Estructura
 
-- `src/main/java`: código fuente de la aplicación
-- `src/test/java`: pruebas unitarias con JUnit 5
+- `src/main/java/edu/eci/dosw/tdd/controller`: API REST, DTOs y mappers
+- `src/main/java/edu/eci/dosw/tdd/core`: modelo de dominio, servicios, utilidades, validadores y excepciones
+- `src/main/java/edu/eci/dosw/tdd/persistence`: capa de persistencia (DAO/Entity, mappers y repositories)
+- `src/test/java/edu/eci/dosw/tdd/controller`: pruebas funcionales por operación de controlador
+- `src/main/resources/application.yaml`: configuración PostgreSQL/JPA
 - `pom.xml`: dependencias y plugins de Maven
 
-## Funcionalidades Implementadas
 
-- `Book`: título, autor, id y disponibilidad.
-- `User`: nombre e id.
-- `Loan`: libro, usuario, fecha de préstamo, estado (`ACTIVE`, `RETURNED`) y fecha de devolución.
-- `LibraryService` mantiene:
-	- listado de usuarios.
-	- listado de préstamos.
-	- mapa de inventario de libros (`bookId -> cantidad de ejemplares`).
-- Operaciones soportadas:
-	- agregar libro con número de ejemplares.
-	- consultar todos los libros y un libro por id.
-	- actualizar disponibilidad de libro.
-	- registrar usuario y consultar usuarios.
-	- crear préstamo validando disponibilidad.
-	- devolver préstamo y actualizar inventario.
 
-## API REST - Prueba De Ejecución
-
-Base URL: `http://localhost:8080`
-
-Crear libro con stock:
-
-```bash
-curl -X POST "http://localhost:8080/api/books?copies=3" \
-	-H "Content-Type: application/json" \
-	-d '{"id":"B-1","title":"Clean Code","author":"Robert C. Martin"}'
-```
-
-Consultar inventario:
-
-```bash
-curl "http://localhost:8080/api/books/inventory"
-```
-
-Respuesta esperada:
-
-```json
-{"B-1":3}
-```
-
-Registrar usuario:
-
-```bash
-curl -X POST "http://localhost:8080/api/users" \
-	-H "Content-Type: application/json" \
-	-d '{"id":"U-1","name":"Maria Perez"}'
-```
-
-Crear préstamo:
-
-```bash
-curl -X POST "http://localhost:8080/api/loans" \
-	-H "Content-Type: application/json" \
-	-d '{"bookId":"B-1","userId":"U-1"}'
-```
-
-Devolver préstamo:
-
-```bash
-curl -X PATCH "http://localhost:8080/api/loans/return" \
-	-H "Content-Type: application/json" \
-	-d '{"bookId":"B-1","userId":"U-1"}'
-```
-
-Error esperado cuando no hay ejemplares:
-
-```json
-{"error":"Book is not available: B-1"}
-```
-
-## Pruebas De Servicios - Evidencia
-
-Ejecución:
-
-```bash
-./mvnw test
-```
-
-Resumen esperado:
-
-```text
-Tests run: 9, Failures: 0, Errors: 0, Skipped: 0
-BUILD SUCCESS
-```
-
-## Cobertura Y Análisis Estático - Evidencia
-
-Cobertura (JaCoCo):
-
-```bash
-./mvnw verify
-```
-
-Reporte HTML:
-
-- `target/site/jacoco/index.html`
-
-Análisis estático (SonarQube):
-
-```bash
-./mvnw sonar:sonar -Dsonar.host.url=http://localhost:9000 -Dsonar.token=TU_TOKEN
-```
-
-Nota: para ejecutar el análisis estático es necesario tener un servidor SonarQube activo en `localhost:9000`.
-
-## Bitácora
-
-Link del repositorio (ESA):
-
-- https://github.com/mariajoseperez01/DOSW-Library
+Ejecución de funcionalidades de la API
+![alt text](src/main/resources/imagenes/Funcionalidades%20API.png)

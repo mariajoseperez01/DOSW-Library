@@ -1,7 +1,7 @@
 package edu.eci.dosw.tdd.controller;
 
-import edu.eci.dosw.tdd.model.User;
-import edu.eci.dosw.tdd.service.LibraryService;
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -11,31 +11,37 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
+import edu.eci.dosw.tdd.controller.dto.UserDTO;
+import edu.eci.dosw.tdd.controller.mapper.UserMapper;
+import edu.eci.dosw.tdd.core.model.User;
+import edu.eci.dosw.tdd.core.service.UserService;
 
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
 
-	private final LibraryService libraryService;
+	private final UserService userService;
 
-	public UserController(LibraryService libraryService) {
-		this.libraryService = libraryService;
+	public UserController(UserService userService) {
+		this.userService = userService;
 	}
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	public User registerUser(@RequestBody User user) {
-		return libraryService.registerUser(user);
+	public UserDTO registerUser(@RequestBody UserDTO userDto) {
+		User registeredUser = userService.registerUser(UserMapper.toModel(userDto));
+		return UserMapper.toDto(registeredUser);
 	}
 
 	@GetMapping
-	public List<User> getAllUsers() {
-		return libraryService.getAllUsers();
+	public List<UserDTO> getAllUsers() {
+		return userService.getAllUsers().stream()
+			.map(UserMapper::toDto)
+			.toList();
 	}
 
 	@GetMapping("/{userId}")
-	public User getUserById(@PathVariable String userId) {
-		return libraryService.getUserById(userId);
+	public UserDTO getUserById(@PathVariable String userId) {
+		return UserMapper.toDto(userService.getUserById(userId));
 	}
 }

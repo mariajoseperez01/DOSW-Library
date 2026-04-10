@@ -33,8 +33,27 @@ services:
       retries: 10
     restart: unless-stopped
 
+  library-db:
+    image: postgres:15
+    container_name: dosw-library-db
+    environment:
+      POSTGRES_USER: dosw
+      POSTGRES_PASSWORD: dosw
+      POSTGRES_DB: dosw_library
+    ports:
+      - "5433:5432"
+    volumes:
+      - library_postgresql_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dosw -d dosw_library"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
 volumes:
   sonarqube_data:
   sonarqube_extensions:
   sonarqube_logs:
   postgresql_data:
+  library_postgresql_data:

@@ -1,0 +1,45 @@
+@startuml
+hide circle
+skinparam linetype ortho
+
+entity "BOOKS" as books {
+  *id : varchar(50) <<PK>>
+  --
+  title : varchar
+  author : varchar
+}
+
+entity "USERS" as users {
+  *id : varchar(50) <<PK>>
+  --
+  name : varchar
+}
+
+entity "BOOK_INVENTORY" as inventory {
+  *book_id : varchar(50) <<PK, FK>>
+  --
+  copies : int
+}
+
+entity "LOANS" as loans {
+  *id : bigint <<PK>>
+  --
+  book_id : varchar(50) <<FK>>
+  user_id : varchar(50) <<FK>>
+  loan_date : date
+  status : varchar(20)
+  return_date : date
+}
+
+books ||--|| inventory : "1:1"
+books ||--o{ loans : "1:N"
+users ||--o{ loans : "1:N"
+
+note right of loans
+3FN:
+- No atributos multivaluados.
+- No dependencias parciales.
+- No dependencias transitivas entre
+  atributos no clave.
+end note
+@enduml

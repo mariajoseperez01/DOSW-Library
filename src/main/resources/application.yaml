@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: DOSW-Library
+  datasource:
+    url: jdbc:postgresql://localhost:5433/dosw_library
+    username: dosw
+    password: dosw
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+  sql:
+    init:
+      mode: never

@@ -1,7 +1,7 @@
 package edu.eci.dosw.tdd.controller;
 
-import edu.eci.dosw.tdd.model.Loan;
-import edu.eci.dosw.tdd.service.LibraryService;
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -11,31 +11,35 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
+import edu.eci.dosw.tdd.controller.dto.LoanDTO;
+import edu.eci.dosw.tdd.controller.mapper.LoanMapper;
+import edu.eci.dosw.tdd.core.service.LoanService;
 
 @RestController
 @RequestMapping("/api/loans")
 public class LoanController {
 
-	private final LibraryService libraryService;
+	private final LoanService loanService;
 
-	public LoanController(LibraryService libraryService) {
-		this.libraryService = libraryService;
+	public LoanController(LoanService loanService) {
+		this.loanService = loanService;
 	}
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	public Loan createLoan(@RequestBody LoanRequest request) {
-		return libraryService.createLoan(request.getBookId(), request.getUserId());
+	public LoanDTO createLoan(@RequestBody LoanDTO request) {
+		return LoanMapper.toDto(loanService.createLoan(request.getBookId(), request.getUserId()));
 	}
 
 	@PatchMapping("/return")
-	public Loan returnLoan(@RequestBody LoanRequest request) {
-		return libraryService.returnLoan(request.getBookId(), request.getUserId());
+	public LoanDTO returnLoan(@RequestBody LoanDTO request) {
+		return LoanMapper.toDto(loanService.returnLoan(request.getBookId(), request.getUserId()));
 	}
 
 	@GetMapping
-	public List<Loan> getAllLoans() {
-		return libraryService.getAllLoans();
+	public List<LoanDTO> getAllLoans() {
+		return loanService.getAllLoans().stream()
+			.map(LoanMapper::toDto)
+			.toList();
 	}
 }

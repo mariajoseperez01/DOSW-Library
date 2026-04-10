@@ -1,4 +1,4 @@
-package edu.eci.dosw.tdd.model;
+package edu.eci.dosw.tdd.core.model;
 
 import java.time.LocalDate;
 import java.util.Objects;
