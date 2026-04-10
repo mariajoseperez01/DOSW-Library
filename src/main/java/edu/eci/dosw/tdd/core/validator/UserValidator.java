@@ -14,5 +14,6 @@ public final class UserValidator {
 		}
 		ValidationUtil.requireNonBlank(user.getId(), "User id");
 		ValidationUtil.requireNonBlank(user.getName(), "User name");
+		ValidationUtil.requireNonBlank(user.getPassword(), "User password");
 	}
 }

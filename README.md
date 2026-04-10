@@ -7,51 +7,11 @@ Proyecto Spring Boot con soporte para pruebas unitarias con JUnit 5, cobertura c
 ![alt text](src/main/resources/uml/ComponentesGeneral.png)
 
 ## DIAGRAMA DE COMPONENTES ESPECIFICO DE LA BIBLIOTECA
+
 ![alt text](src/main/resources/uml/ComponentesEspecifico.png)
 
-## DIAGRAMA ENTIDAD RELACION (3FN)
+## DIAGRAMA clases
 
-Archivo UML (PlantUML): `src/main/resources/uml/EntidadRelacion3FN.puml`
-
-```plantuml
-@startuml
-hide circle
-skinparam linetype ortho
-
-entity "BOOKS" as books {
-	*id : varchar(50) <<PK>>
-	--
-	title : varchar
-	author : varchar
-}
-
-entity "USERS" as users {
-	*id : varchar(50) <<PK>>
-	--
-	name : varchar
-}
-
-entity "BOOK_INVENTORY" as inventory {
-	*book_id : varchar(50) <<PK, FK>>
-	--
-	copies : int
-}
-
-entity "LOANS" as loans {
-	*id : bigint <<PK>>
-	--
-	book_id : varchar(50) <<FK>>
-	user_id : varchar(50) <<FK>>
-	loan_date : date
-	status : varchar(20)
-	return_date : date
-}
-
-books ||--|| inventory : "1:1"
-books ||--o{ loans : "1:N"
-users ||--o{ loans : "1:N"
-@enduml
-```
 
 ## Requisitos
 
@@ -108,3 +68,14 @@ Para analizar el código con SonarQube:
 
 Ejecución de funcionalidades de la API
 ![alt text](src/main/resources/imagenes/Funcionalidades%20API.png)
+
+
+
+
+Video con pruebas de persistencia relacional
+
+ https://drive.google.com/file/d/1tA0qauwH5J1jzvwv0SdI3OaPnU1Uy0s7/view?usp=sharing 
+
+
+video de Seguridad (Autorización y Autenticación)
+

@@ -14,12 +14,16 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
 
+import edu.eci.dosw.tdd.core.model.Role;
+import edu.eci.dosw.tdd.core.model.User;
+import edu.eci.dosw.tdd.core.service.UserService;
 import edu.eci.dosw.tdd.persistence.repository.BookInventoryRepository;
 import edu.eci.dosw.tdd.persistence.repository.BookRepository;
 import edu.eci.dosw.tdd.persistence.repository.LoanRepository;
+import edu.eci.dosw.tdd.persistence.repository.UserRepository;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
+@ActiveProfiles({"test", "relational"})
 class BookControllerFunctionalTest {
 
 	@LocalServerPort
@@ -34,17 +38,33 @@ class BookControllerFunctionalTest {
 	@Autowired
 	private LoanRepository loanRepository;
 
+	@Autowired
+	private UserRepository userRepository;
+
+	@Autowired
+	private UserService userService;
+
 	@BeforeEach
 	void cleanDatabase() {
 		loanRepository.deleteAll();
 		inventoryRepository.deleteAll();
 		bookRepository.deleteAll();
+		userRepository.deleteAll();
+		userService.registerUser(new User("librarian", "librarian123", Role.LIBRARIAN, "LIB-1"));
 	}
 
-	private HttpResponse<String> send(String method, String path, String body) throws IOException, InterruptedException {
+	private String loginToken() throws IOException, InterruptedException {
+		HttpResponse<String> response = send("POST", "/auth/login", "{\"username\":\"librarian\",\"password\":\"librarian123\"}", null);
+		return response.body().replaceAll(".*\\\"token\\\":\\\"([^\\\"]+)\\\".*", "$1");
+	}
+
+	private HttpResponse<String> send(String method, String path, String body, String token) throws IOException, InterruptedException {
 		HttpRequest.Builder builder = HttpRequest.newBuilder()
 			.uri(URI.create("http://localhost:" + port + path))
 			.header("Content-Type", "application/json");
+		if (token != null) {
+			builder.header("Authorization", "Bearer " + token);
+		}
 		if (body == null) {
 			builder.method(method, HttpRequest.BodyPublishers.noBody());
 		} else {
@@ -55,8 +75,9 @@ class BookControllerFunctionalTest {
 
 	@Test
 	void shouldCreateBookAndPersistInventory() throws Exception {
+		String token = loginToken();
 		String body = "{\"id\":\"B-1\",\"title\":\"Clean Code\",\"author\":\"Robert C. Martin\",\"available\":true}";
-		HttpResponse<String> response = send("POST", "/api/books?copies=3", body);
+		HttpResponse<String> response = send("POST", "/api/books?copies=3", body, token);
 
 		assertThat(response.statusCode()).isEqualTo(201);
 		assertThat(response.body()).contains("\"id\":\"B-1\"");
@@ -69,10 +90,11 @@ class BookControllerFunctionalTest {
 
 	@Test
 	void shouldUpdateAvailabilityAndPersistChange() throws Exception {
+		String token = loginToken();
 		String body = "{\"id\":\"B-5\",\"title\":\"DDD\",\"author\":\"Eric Evans\",\"available\":true}";
-		send("POST", "/api/books?copies=2", body);
+		send("POST", "/api/books?copies=2", body, token);
 
-		HttpResponse<String> patchResponse = send("PATCH", "/api/books/B-5/availability?available=false", null);
+		HttpResponse<String> patchResponse = send("PATCH", "/api/books/B-5/availability?available=false", null, token);
 		assertThat(patchResponse.statusCode()).isEqualTo(200);
 		assertThat(patchResponse.body()).contains("\"available\":false");
 		assertThat(inventoryRepository.findById("B-5").orElseThrow().getCopies()).isZero();
@@ -80,14 +102,15 @@ class BookControllerFunctionalTest {
 
 	@Test
 	void shouldReturnBooksAndInventory() throws Exception {
+		String token = loginToken();
 		String body = "{\"id\":\"B-9\",\"title\":\"Refactoring\",\"author\":\"Martin Fowler\",\"available\":true}";
-		send("POST", "/api/books?copies=1", body);
+		send("POST", "/api/books?copies=1", body, token);
 
-		HttpResponse<String> booksResponse = send("GET", "/api/books", null);
+		HttpResponse<String> booksResponse = send("GET", "/api/books", null, token);
 		assertThat(booksResponse.statusCode()).isEqualTo(200);
 		assertThat(booksResponse.body()).contains("\"id\":\"B-9\"");
 
-		HttpResponse<String> inventoryResponse = send("GET", "/api/books/inventory", null);
+		HttpResponse<String> inventoryResponse = send("GET", "/api/books/inventory", null, token);
 		assertThat(inventoryResponse.statusCode()).isEqualTo(200);
 		assertThat(inventoryResponse.body()).contains("\"B-9\":1");
 	}

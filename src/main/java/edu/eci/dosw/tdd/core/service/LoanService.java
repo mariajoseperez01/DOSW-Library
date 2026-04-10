@@ -1,6 +1,5 @@
 package edu.eci.dosw.tdd.core.service;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -15,29 +14,20 @@ import edu.eci.dosw.tdd.core.model.Loan;
 import edu.eci.dosw.tdd.core.model.User;
 import edu.eci.dosw.tdd.core.util.DateUtil;
 import edu.eci.dosw.tdd.core.validator.LoanValidator;
-import edu.eci.dosw.tdd.persistence.dao.BookDAO;
-import edu.eci.dosw.tdd.persistence.dao.LoanDAO;
-import edu.eci.dosw.tdd.persistence.dao.UserDAO;
-import edu.eci.dosw.tdd.persistence.mapper.LoanPersistenceMapper;
-import edu.eci.dosw.tdd.persistence.repository.BookRepository;
-import edu.eci.dosw.tdd.persistence.repository.LoanRepository;
-import edu.eci.dosw.tdd.persistence.repository.UserRepository;
+import edu.eci.dosw.tdd.persistence.port.BookRepositoryPort;
+import edu.eci.dosw.tdd.persistence.port.LoanRepositoryPort;
+import edu.eci.dosw.tdd.persistence.port.UserRepositoryPort;
 
 @Service
 public class LoanService {
 
 	private static final int MAX_ACTIVE_LOANS_PER_USER = 3;
 
-	private final BookService bookService;
-	private final UserService userService;
-	private final LoanRepository loanRepository;
-	private final BookRepository bookRepository;
-	private final UserRepository userRepository;
+	private final LoanRepositoryPort loanRepository;
+	private final BookRepositoryPort bookRepository;
+	private final UserRepositoryPort userRepository;
 
-	public LoanService(BookService bookService, UserService userService, LoanRepository loanRepository,
-			BookRepository bookRepository, UserRepository userRepository) {
-		this.bookService = bookService;
-		this.userService = userService;
+	public LoanService(LoanRepositoryPort loanRepository, BookRepositoryPort bookRepository, UserRepositoryPort userRepository) {
 		this.loanRepository = loanRepository;
 		this.bookRepository = bookRepository;
 		this.userRepository = userRepository;
@@ -46,54 +36,54 @@ public class LoanService {
 	@Transactional
 	public Loan createLoan(String bookId, String userId) {
 		LoanValidator.validateLoanRequest(bookId, userId);
-		Book book = bookService.getBookById(bookId);
-		User user = userService.getUserById(userId);
+		Book book = bookRepository.findById(bookId)
+			.orElseThrow(() -> new NoSuchElementException("Book not found: " + bookId));
+		User user = userRepository.findById(userId)
+			.orElseThrow(() -> new NoSuchElementException("User not found: " + userId));
 
-		if (!book.isAvailable() || bookService.getAvailableCopies(bookId) <= 0) {
+		if (!book.isAvailable() || bookRepository.getCopies(bookId) <= 0) {
 			throw new BookNotAvailableException("Book is not available: " + bookId);
 		}
 
-		long currentUserLoans = loanRepository.countByUser_IdAndStatus(userId, Loan.Status.ACTIVE);
+		long currentUserLoans = loanRepository.countActiveByUserId(userId);
 		if (currentUserLoans >= MAX_ACTIVE_LOANS_PER_USER) {
 			throw new LoanLimitExceededException("Loan limit exceeded for user: " + userId);
 		}
 
-		LoanDAO loanDAO = new LoanDAO();
-		BookDAO bookDAO = bookRepository.findById(book.getId())
-			.orElseThrow(() -> new NoSuchElementException("Book not found: " + book.getId()));
-		UserDAO userDAO = userRepository.findById(user.getId())
-			.orElseThrow(() -> new NoSuchElementException("User not found: " + user.getId()));
-		loanDAO.setBook(bookDAO);
-		loanDAO.setUser(userDAO);
-		loanDAO.setLoanDate(DateUtil.today());
-		loanDAO.setStatus(Loan.Status.ACTIVE);
-		loanDAO.setReturnDate(null);
-		LoanDAO createdLoanDAO = loanRepository.save(loanDAO);
+		Loan loan = new Loan();
+		loan.setBook(book);
+		loan.setUser(user);
+		loan.setLoanDate(DateUtil.today());
+		loan.setStatus(Loan.Status.ACTIVE);
+		loan.setReturnDate(null);
+		Loan createdLoan = loanRepository.save(loan);
 
-		bookService.decrementCopy(bookId);
-		return LoanPersistenceMapper.toModel(createdLoanDAO, bookService.getAvailableCopies(bookId));
+		bookRepository.decrementCopy(bookId);
+		createdLoan.setBook(bookRepository.findById(bookId).orElse(book));
+		return createdLoan;
 	}
 
 	@Transactional
 	public Loan returnLoan(String bookId, String userId) {
 		LoanValidator.validateLoanRequest(bookId, userId);
-		LoanDAO loanDAO = loanRepository.findFirstByBook_IdAndUser_IdAndStatusOrderByLoanDateDesc(bookId, userId, Loan.Status.ACTIVE)
-			.orElseThrow(() -> new NoSuchElementException(
-				"Active loan not found for book " + bookId + " and user " + userId));
+		Loan loan = loanRepository.findActiveByBookAndUser(bookId, userId)
+			.orElseThrow(() -> new NoSuchElementException("Active loan not found for book " + bookId + " and user " + userId));
 
-		loanDAO.setStatus(Loan.Status.RETURNED);
-		loanDAO.setReturnDate(DateUtil.today());
-		LoanDAO returnedLoanDAO = loanRepository.save(loanDAO);
-		bookService.incrementCopy(bookId);
-		return LoanPersistenceMapper.toModel(returnedLoanDAO, bookService.getAvailableCopies(bookId));
+		loan.setStatus(Loan.Status.RETURNED);
+		loan.setReturnDate(DateUtil.today());
+		Loan returnedLoan = loanRepository.save(loan);
+		bookRepository.incrementCopy(bookId);
+		returnedLoan.setBook(bookRepository.findById(bookId).orElse(loan.getBook()));
+		return returnedLoan;
 	}
 
 	@Transactional(readOnly = true)
 	public List<Loan> getAllLoans() {
-		List<Loan> loans = new ArrayList<>();
-		for (LoanDAO loanDAO : loanRepository.findAll()) {
-			loans.add(LoanPersistenceMapper.toModel(loanDAO, bookService.getAvailableCopies(loanDAO.getBook().getId())));
-		}
-		return Collections.unmodifiableList(loans);
+		return Collections.unmodifiableList(loanRepository.findAll());
+	}
+
+	@Transactional(readOnly = true)
+	public List<Loan> getLoansByUserId(String userId) {
+		return Collections.unmodifiableList(loanRepository.findAllByUserId(userId));
 	}
 }

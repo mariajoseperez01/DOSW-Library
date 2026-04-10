@@ -1,18 +1,22 @@
 spring:
   application:
     name: DOSW-Library
-  datasource:
-    url: jdbc:postgresql://localhost:5433/dosw_library
-    username: dosw
-    password: dosw
-    driver-class-name: org.postgresql.Driver
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
-  sql:
-    init:
-      mode: never
+  profiles:
+    active: mongo
+  data:
+    mongodb:
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/dosw_library}
+
+app:
+  security:
+    jwt:
+      secret: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      ttl-millis: 3600000
+
+server:
+  port: 8443
+  ssl:
+    enabled: true
+    key-store: classpath:keystore/dosw-library.p12
+    key-store-password: changeit
+    key-store-type: PKCS12

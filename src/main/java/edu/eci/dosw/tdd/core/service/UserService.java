@@ -3,37 +3,39 @@ package edu.eci.dosw.tdd.core.service;
 import java.util.Collections;
 import java.util.List;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import edu.eci.dosw.tdd.core.exception.UserNotFoundException;
 import edu.eci.dosw.tdd.core.model.User;
 import edu.eci.dosw.tdd.core.validator.UserValidator;
-import edu.eci.dosw.tdd.persistence.mapper.UserPersistenceMapper;
-import edu.eci.dosw.tdd.persistence.repository.UserRepository;
+import edu.eci.dosw.tdd.persistence.port.UserRepositoryPort;
 
 @Service
 public class UserService {
 
-	private final UserRepository userRepository;
+	private final UserRepositoryPort userRepository;
+	private final PasswordEncoder passwordEncoder;
 
-	public UserService(UserRepository userRepository) {
+	public UserService(UserRepositoryPort userRepository, PasswordEncoder passwordEncoder) {
 		this.userRepository = userRepository;
+		this.passwordEncoder = passwordEncoder;
 	}
 
 	@Transactional
 	public User registerUser(User user) {
 		UserValidator.validate(user);
-		return UserPersistenceMapper.toModel(userRepository.save(UserPersistenceMapper.toDao(user)));
+		user.setPassword(passwordEncoder.encode(user.getPassword()));
+		return userRepository.save(user);
 	}
 
 	public List<User> getAllUsers() {
-		return Collections.unmodifiableList(userRepository.findAll().stream().map(UserPersistenceMapper::toModel).toList());
+		return Collections.unmodifiableList(userRepository.findAll());
 	}
 
 	public User getUserById(String userId) {
 		return userRepository.findById(userId)
-			.map(UserPersistenceMapper::toModel)
 			.orElseThrow(() -> new UserNotFoundException("User not found: " + userId));
 	}
 }

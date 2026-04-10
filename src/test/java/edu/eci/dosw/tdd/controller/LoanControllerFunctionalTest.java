@@ -15,13 +15,16 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
 
 import edu.eci.dosw.tdd.core.model.Loan;
+import edu.eci.dosw.tdd.core.model.Role;
+import edu.eci.dosw.tdd.core.model.User;
+import edu.eci.dosw.tdd.core.service.UserService;
 import edu.eci.dosw.tdd.persistence.repository.BookInventoryRepository;
 import edu.eci.dosw.tdd.persistence.repository.BookRepository;
 import edu.eci.dosw.tdd.persistence.repository.LoanRepository;
 import edu.eci.dosw.tdd.persistence.repository.UserRepository;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
+@ActiveProfiles({"test", "relational"})
 class LoanControllerFunctionalTest {
 
 	@LocalServerPort
@@ -39,18 +42,30 @@ class LoanControllerFunctionalTest {
 	@Autowired
 	private UserRepository userRepository;
 
+	@Autowired
+	private UserService userService;
+
 	@BeforeEach
 	void cleanDatabase() {
 		loanRepository.deleteAll();
 		inventoryRepository.deleteAll();
 		bookRepository.deleteAll();
 		userRepository.deleteAll();
+		userService.registerUser(new User("librarian", "librarian123", Role.LIBRARIAN, "LIB-1"));
 	}
 
-	private HttpResponse<String> send(String method, String path, String body) throws IOException, InterruptedException {
+	private String loginToken() throws IOException, InterruptedException {
+		HttpResponse<String> response = send("POST", "/auth/login", "{\"username\":\"librarian\",\"password\":\"librarian123\"}", null);
+		return response.body().replaceAll(".*\\\"token\\\":\\\"([^\\\"]+)\\\".*", "$1");
+	}
+
+	private HttpResponse<String> send(String method, String path, String body, String token) throws IOException, InterruptedException {
 		HttpRequest.Builder builder = HttpRequest.newBuilder()
 			.uri(URI.create("http://localhost:" + port + path))
 			.header("Content-Type", "application/json");
+		if (token != null) {
+			builder.header("Authorization", "Bearer " + token);
+		}
 		if (body == null) {
 			builder.method(method, HttpRequest.BodyPublishers.noBody());
 		} else {
@@ -60,14 +75,16 @@ class LoanControllerFunctionalTest {
 	}
 
 	private void seedBookAndUser() throws Exception {
-		send("POST", "/api/books?copies=2", "{\"id\":\"B-1\",\"title\":\"Clean Architecture\",\"author\":\"Robert C. Martin\",\"available\":true}");
-		send("POST", "/api/users", "{\"id\":\"U-1\",\"name\":\"Maria Perez\"}");
+		String token = loginToken();
+		send("POST", "/api/books?copies=2", "{\"id\":\"B-1\",\"title\":\"Clean Architecture\",\"author\":\"Robert C. Martin\",\"available\":true}", token);
+		send("POST", "/api/users", "{\"id\":\"U-1\",\"name\":\"Maria Perez\",\"password\":\"user123\",\"role\":\"USER\"}", token);
 	}
 
 	@Test
 	void shouldCreateLoanAndPersistDatabaseChanges() throws Exception {
 		seedBookAndUser();
-		HttpResponse<String> response = send("POST", "/api/loans", "{\"bookId\":\"B-1\",\"userId\":\"U-1\"}");
+		String token = loginToken();
+		HttpResponse<String> response = send("POST", "/api/loans", "{\"bookId\":\"B-1\",\"userId\":\"U-1\"}", token);
 		assertThat(response.statusCode()).isEqualTo(201);
 		assertThat(response.body()).contains("\"status\":\"ACTIVE\"");
 
@@ -78,21 +95,23 @@ class LoanControllerFunctionalTest {
 	@Test
 	void shouldReturnLoanAndPersistDatabaseChanges() throws Exception {
 		seedBookAndUser();
-		send("POST", "/api/loans", "{\"bookId\":\"B-1\",\"userId\":\"U-1\"}");
-		HttpResponse<String> response = send("PATCH", "/api/loans/return", "{\"bookId\":\"B-1\",\"userId\":\"U-1\"}");
+		String token = loginToken();
+		send("POST", "/api/loans", "{\"bookId\":\"B-1\",\"userId\":\"U-1\"}", token);
+		HttpResponse<String> response = send("PATCH", "/api/loans/return", "{\"bookId\":\"B-1\",\"userId\":\"U-1\"}", token);
 
 		assertThat(response.statusCode()).isEqualTo(200);
 		assertThat(response.body()).contains("\"status\":\"RETURNED\"");
-		assertThat(loanRepository.findAll()).hasSize(1);
-		assertThat(loanRepository.findAll().get(0).getStatus()).isEqualTo(Loan.Status.RETURNED);
+		assertThat(loanRepository.findAll()).hasSize(2);
+		assertThat(loanRepository.findAll()).anySatisfy(loan -> assertThat(loan.getStatus()).isEqualTo(Loan.Status.RETURNED));
 		assertThat(inventoryRepository.findById("B-1").orElseThrow().getCopies()).isEqualTo(2);
 	}
 
 	@Test
 	void shouldListLoansFromDatabase() throws Exception {
 		seedBookAndUser();
-		send("POST", "/api/loans", "{\"bookId\":\"B-1\",\"userId\":\"U-1\"}");
-		HttpResponse<String> response = send("GET", "/api/loans", null);
+		String token = loginToken();
+		send("POST", "/api/loans", "{\"bookId\":\"B-1\",\"userId\":\"U-1\"}", token);
+		HttpResponse<String> response = send("GET", "/api/loans", null, token);
 
 		assertThat(response.statusCode()).isEqualTo(200);
 		assertThat(response.body()).contains("\"bookId\":\"B-1\"");

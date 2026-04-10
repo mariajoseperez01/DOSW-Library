@@ -1,29 +1,17 @@
-package edu.eci.dosw.tdd.persistence.dao;
+package edu.eci.dosw.tdd.persistence.nonrelational.document;
+
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
 
 import edu.eci.dosw.tdd.core.model.Role;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
 
-@Entity
-@Table(name = "users")
-public class UserDAO {
+@Document("users")
+public class UserDocument {
 
 	@Id
-	@Column(name = "id", nullable = false, length = 50)
 	private String id;
-
-	@Column(name = "name", nullable = false)
 	private String name;
-
-	@Column(name = "password", nullable = false)
 	private String password;
-
-	@Enumerated(EnumType.STRING)
-	@Column(name = "role", nullable = false, length = 20)
 	private Role role;
 
 	public String getId() {

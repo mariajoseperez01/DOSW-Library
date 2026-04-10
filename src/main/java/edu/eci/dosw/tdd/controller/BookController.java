@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import edu.eci.dosw.tdd.controller.dto.BookDTO;
 import edu.eci.dosw.tdd.controller.mapper.BookMapper;
@@ -31,6 +32,7 @@ public class BookController {
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
+	@PreAuthorize("hasRole('LIBRARIAN')")
 	public BookDTO addBook(@RequestBody BookDTO bookDto, @RequestParam(defaultValue = "1") int copies) {
 		Book createdBook = bookService.addBook(BookMapper.toModel(bookDto), copies);
 		return BookMapper.toDto(createdBook, bookService.getAvailableCopies(createdBook.getId()));
@@ -50,11 +52,13 @@ public class BookController {
 	}
 
 	@GetMapping("/inventory")
+	@PreAuthorize("hasRole('LIBRARIAN')")
 	public Map<String, Integer> getInventory() {
 		return bookService.getBookInventory();
 	}
 
 	@PatchMapping("/{bookId}/availability")
+	@PreAuthorize("hasRole('LIBRARIAN')")
 	public BookDTO updateAvailability(@PathVariable String bookId, @RequestParam boolean available) {
 		Book book = bookService.updateBookAvailability(bookId, available);
 		return BookMapper.toDto(book, bookService.getAvailableCopies(bookId));
